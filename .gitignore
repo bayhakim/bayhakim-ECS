@@ -1,0 +1,6 @@
+*.log
+*.tmp
+.env
+node_modules/
+*.bak
+Thumbs.db
