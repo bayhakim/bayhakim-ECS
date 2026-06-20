@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ECS</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>ECS</h1>
+      <p>Model, renk, beden, fiyat, stok ve resim kirilimlari</p>
+    </div>
+    <div class="top-actions">
+      <button id="demoData" type="button">Demo Veriyi Ac</button>
+      <button id="liveProducts" type="button">Canli Urunleri Getir</button>
+      <button id="exportCsv" type="button">CSV Al</button>
+      <button id="refresh" type="button">Yenile</button>
+    </div>
+  </header>
+
+  <main>
+    <nav class="tabs">
+      <button class="tab-button active" type="button" data-page="products">Urun Paneli</button>
+      <button class="tab-button" type="button" data-page="reports">Raporlar</button>
+    </nav>
+
+    <div id="pageProducts" class="page active">
+    <section class="band status-band">
+      <div class="band-title">Baglanti</div>
+      <div id="status" class="status-grid"></div>
+    </section>
+
+    <section class="band controls">
+      <div class="field">
+        <label>Veritabani</label>
+        <select id="database"></select>
+      </div>
+      <div class="field">
+        <label>Tablo</label>
+        <select id="table"></select>
+      </div>
+      <button id="loadPreview" type="button">Kolonlari Getir</button>
+      <button id="buildPanel" type="button">Paneli Olustur</button>
+    </section>
+
+    <section class="band controls analysis-controls">
+      <div class="field">
+        <label>Stok Filtresi</label>
+        <select id="stockFilter">
+          <option value="all">Tum stoklar</option>
+          <option value="in">Stokta olanlar</option>
+          <option value="low">Kritik stok (1-2)</option>
+          <option value="out">Stoksuz</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Siralama</label>
+        <select id="sortBy">
+          <option value="model">Model</option>
+          <option value="stockDesc">Stok coktan aza</option>
+          <option value="stockAsc">Stok azdan coga</option>
+          <option value="profitDesc">Kar coktan aza</option>
+          <option value="variantDesc">Varyant coktan aza</option>
+        </select>
+      </div>
+      <button id="serverSearch" type="button">Canli Ara</button>
+      <button id="clearFilters" type="button">Temizle</button>
+    </section>
+
+    <section id="permissionNotice" class="notice hidden"></section>
+
+    <section class="band mapping-band">
+      <div class="band-title">Kolon Eslestirme</div>
+      <div id="mapping" class="mapping-grid"></div>
+    </section>
+
+    <section class="summary">
+      <div><strong id="modelCount">0</strong><span>Model</span></div>
+      <div><strong id="variantCount">0</strong><span>Renk/Beden</span></div>
+      <div><strong id="stockTotal">0</strong><span>Kalan Stok</span></div>
+      <div><strong id="stockValue">0</strong><span>Stok Satis Degeri</span></div>
+      <div><strong id="costValue">0</strong><span>Stok Maliyeti</span></div>
+      <div><strong id="profitValue">0</strong><span>Tahmini Kar</span></div>
+    </section>
+
+    </div>
+
+    <div id="pageReports" class="page">
+    <section class="band missing-attributes">
+      <div class="subsection-head">
+        <h3>Etiket/Ozellik Filtresi Eksik Urunler</h3>
+        <span id="missingAttrCount">0 kayit</span>
+      </div>
+      <div class="missing-toolbar">
+        <div class="field">
+          <label>Arama</label>
+          <input id="missingAttrSearch" placeholder="Urun kodu, barkod, marka, renk">
+        </div>
+        <div class="field">
+          <label>Marka</label>
+          <input id="missingAttrBrandSearch" list="missingAttrBrandList" placeholder="Tum markalar / marka yaz">
+          <input id="missingAttrBrand" type="hidden" value="">
+          <datalist id="missingAttrBrandList"></datalist>
+        </div>
+        <div class="field">
+          <label>Kontrol</label>
+          <select id="missingAttrCheck">
+            <option value="description" selected>Nebim Aciklama</option>
+            <option value="keywords">ECS Urun Ozellikleri</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Eksik Ozellik</label>
+          <select id="missingAttrFeature">
+            <option value="">Tum ozellikler</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Ozellik Durumu</label>
+          <select id="missingAttrStatus">
+            <option value="missing" selected>Ozelligi olmayanlar</option>
+            <option value="present">Ozelligi olanlar</option>
+            <option value="all">Tumu</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Rapor Tipi</label>
+          <select id="missingAttrMode">
+            <option value="detail">Renk/Beden/Barkod Detayli</option>
+            <option value="model">Sadece Model Detayli</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Stok</label>
+          <select id="missingAttrStock">
+            <option value="in" selected>Stokta olanlar</option>
+            <option value="all">Tum urunler</option>
+            <option value="out">Stoksuz</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Limit</label>
+          <select id="missingAttrTake">
+            <option value="250">250</option>
+            <option value="500" selected>500</option>
+            <option value="1000">1000</option>
+          </select>
+        </div>
+        <button id="loadMissingAttrs" type="button">Eksikleri Getir</button>
+        <button id="exportMissingAttrs" type="button">Excel/CSV Al</button>
+      </div>
+      <div id="missingAttrNotice" class="inline-note"></div>
+      <div class="table-wrap missing-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Resim</th>
+              <th>Eksik Ozellik</th>
+              <th>Urun Kodu</th>
+              <th>Marka</th>
+              <th>Baslik</th>
+              <th>Renk</th>
+              <th>Beden</th>
+              <th>Barkod</th>
+              <th>Stok Kodu</th>
+              <th>Stok</th>
+              <th>Foto</th>
+              <th>Islem</th>
+            </tr>
+          </thead>
+          <tbody id="missingAttrRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="featureNotePanel" class="feature-note-panel hidden">
+    <div class="feature-note-dialog">
+    <section class="band feature-note">
+      <div class="subsection-head">
+        <h3>Ozellik Notu Olustur</h3>
+        <div class="dialog-title-actions">
+          <span id="featureNoteTitle">Urun secilmedi</span>
+          <button id="closeFeatureNote" type="button">Kapat</button>
+        </div>
+      </div>
+      <div id="featureSummary" class="feature-summary"></div>
+      <div class="feature-editor">
+        <label>Ozellik Degeri</label>
+        <input id="featureValue" placeholder="Orn: Siyah, Erkek, New Balance">
+        <label>Not / Web Arama Bilgisi</label>
+        <textarea id="featureNote" rows="8"></textarea>
+      </div>
+      <div class="inline-note">Nebim'e Yaz secili urun kodunu Nebim V3'te bulur ve not alanini prItemNotes tablosuna duz metin olarak yazar. Ardindan Nebimden ECS Guncelle ile ECS servisi tetiklenir.</div>
+      <div class="note-actions">
+        <button id="generateFeature" type="button">Ozellik Olustur</button>
+        <button id="webSearchFeature" type="button">Web Ara</button>
+        <button id="writeFeature" type="button">Nebim'e Yaz</button>
+        <button id="updateEcsFromNebim" type="button">Nebimden ECS Guncelle</button>
+      </div>
+      <div id="featureWriteResult" class="inline-note"></div>
+    </section>
+    </div>
+    </section>
+    </div>
+
+    <section id="productWorkspace" class="workspace">
+      <aside>
+        <div class="search">
+          <input id="search" placeholder="Model, urun kodu, renk ara">
+        </div>
+        <div id="modelList" class="model-list"></div>
+      </aside>
+      <section class="detail">
+        <div id="detailEmpty" class="empty">Model secildiginde detaylar burada gorunecek.</div>
+        <div id="detail" class="hidden">
+          <div class="detail-head">
+            <div class="image-box" id="imageBox"></div>
+            <div>
+              <h2 id="detailModel"></h2>
+              <p id="detailTitle"></p>
+              <div id="chips" class="chips"></div>
+            </div>
+          </div>
+          <div id="detailMetrics" class="metric-strip"></div>
+          <div id="detailDescription" class="description"></div>
+          <section class="subsection">
+            <div class="subsection-head">
+              <h3>Pazaryeri Fiyatlari</h3>
+              <span id="platformCount">0 kayit</span>
+            </div>
+            <div id="platformMetrics" class="metric-strip platform-metrics"></div>
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Platform</th>
+                    <th>Model Kodu</th>
+                    <th>Stok Kodu</th>
+                    <th>Barkod</th>
+                    <th>Renk</th>
+                    <th>Beden</th>
+                    <th>Maliyet</th>
+                    <th>Satis</th>
+                    <th>Liste</th>
+                    <th>Fark</th>
+                    <th>Durum</th>
+                  </tr>
+                </thead>
+                <tbody id="platformRows"></tbody>
+              </table>
+            </div>
+          </section>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Urun Kodu</th>
+                  <th>Renk</th>
+                  <th>Beden</th>
+                  <th>Barkod</th>
+                  <th>Alis</th>
+                  <th>Maliyet</th>
+                  <th>Satis</th>
+                  <th>Liste</th>
+                  <th>Stok</th>
+                  <th>Kar</th>
+                </tr>
+              </thead>
+              <tbody id="variantRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
