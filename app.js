@@ -37,12 +37,16 @@ let missingAttributeGroupsLoaded = false;
 let reportBrandsLoaded = false;
 let reportBrands = [];
 let brandSearchTimer = null;
+let stockLocationRows = [];
+let stockDetailRows = [];
+const stockMatrixGroups = ["LVT-TEKS-001", "LVT-AYK-001", "LVT-ÇNT-001", "MULTIBRAND-001", "Depo"];
 
 const $ = (id) => document.getElementById(id);
 const normalize = (text) => (text || "").toString().toLowerCase().replace(/[^a-z0-9]/g, "");
 
 async function api(path, options) {
-  const res = await fetch(path, options);
+  const url = path.includes("?") ? `${path}&_=${Date.now()}` : `${path}?_=${Date.now()}`;
+  const res = await fetch(url, { ...(options || {}), cache: "no-store" });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Istek tamamlanamadi");
   return data;
@@ -452,6 +456,163 @@ function exportCsv() {
   URL.revokeObjectURL(url);
 }
 
+async function loadStockLocations() {
+  $("stockLocationNotice").textContent = "Stok gozleri yukleniyor...";
+  $("stockLocationRows").innerHTML = `<tr><td colspan="12">Yukleniyor...</td></tr>`;
+  const search = $("stockLocationSearch").value.trim();
+  const group = $("stockLocationGroup").value;
+  const take = $("stockLocationTake").value;
+  try {
+    const data = await api(`/api/stock-locations?take=${encodeURIComponent(take)}&group=${encodeURIComponent(group)}&search=${encodeURIComponent(search)}`);
+    stockLocationRows = data.rows || [];
+    renderStockLocations();
+    $("stockLocationNotice").textContent = stockLocationRows.length
+      ? "MULTIBRAND-001, LVT-TEKS-001, LVT-AYK-001, LVT-ÇNT-001 disindaki gozler Depo olarak gosteriliyor."
+      : "Bu filtrelerle stok gozu bulunamadi.";
+  } catch (err) {
+    $("stockLocationCount").textContent = "Hata";
+    const message = err.message === "Not found" ? "Stok servisi eski panelden cevap verdi. Sayfayi yenileyip tekrar deneyin." : err.message;
+    $("stockLocationNotice").textContent = message;
+    $("stockLocationRows").innerHTML = `<tr><td colspan="12">${escapeHtml(message)}</td></tr>`;
+  }
+}
+
+function renderStockLocations() {
+  $("stockLocationCount").textContent = `${stockLocationRows.length} kayit`;
+  if (!stockLocationRows.length) {
+    $("stockLocationRows").innerHTML = `<tr><td colspan="12">Kayit yok.</td></tr>`;
+    return;
+  }
+  $("stockLocationRows").innerHTML = stockLocationRows.map((row) => {
+    const stock = numeric(row.locationStock);
+    const rowClass = stock <= 0 ? "out-stock" : stock <= 2 ? "low-stock" : "";
+    return `<tr class="${rowClass}">
+      <td><div class="table-thumb">${renderImage(row.image, row.productCode)}</div></td>
+      <td>${escapeHtml(row.locationGroup)}</td>
+      <td>${escapeHtml(row.shelfUnitCode)}</td>
+      <td><button class="link-button stock-detail-link" type="button" data-product-code="${escapeAttr(row.productCode)}">${escapeHtml(row.productCode)}</button></td>
+      <td>${escapeHtml(row.title)}</td>
+      <td>${escapeHtml(row.brand)}</td>
+      <td>${escapeHtml(row.color)}</td>
+      <td>${escapeHtml(row.size)}</td>
+      <td>${escapeHtml(row.barcode)}</td>
+      <td>${escapeHtml(row.stockCode)}</td>
+      <td>${escapeHtml(row.locationStock)}</td>
+      <td>${escapeHtml(row.variantStock)}</td>
+    </tr>`;
+  }).join("");
+  document.querySelectorAll(".stock-detail-link").forEach((button) => button.addEventListener("click", () => {
+    $("stockDetailProductCode").value = button.dataset.productCode || "";
+    loadStockDetail();
+  }));
+}
+
+async function loadStockDetail() {
+  const productCode = $("stockDetailProductCode").value.trim();
+  if (!productCode) {
+    $("stockLocationNotice").textContent = "Detay icin urun kodu yaz.";
+    return;
+  }
+  $("stockDetailPanel").classList.remove("hidden");
+  $("stockDetailTitle").textContent = `${productCode} Goz Detayi`;
+  $("stockDetailCount").textContent = "Yukleniyor";
+  $("stockDetailSummary").innerHTML = "";
+  $("stockSizeMatrix").innerHTML = `<tbody><tr><td>Yukleniyor...</td></tr></tbody>`;
+  $("stockDetailRows").innerHTML = `<tr><td colspan="12">Yukleniyor...</td></tr>`;
+  try {
+    const data = await api(`/api/stock-location-detail?productCode=${encodeURIComponent(productCode)}`);
+    stockDetailRows = data.rows || [];
+    renderStockDetail(productCode);
+  } catch (err) {
+    $("stockDetailCount").textContent = "Hata";
+    const message = err.message === "Not found" ? "Stok detay servisi eski panelden cevap verdi. Sayfayi yenileyip tekrar deneyin." : err.message;
+    $("stockSizeMatrix").innerHTML = "";
+    $("stockDetailRows").innerHTML = `<tr><td colspan="12">${escapeHtml(message)}</td></tr>`;
+  }
+}
+
+function renderStockDetail(productCode) {
+  $("stockDetailCount").textContent = `${stockDetailRows.length} kayit`;
+  if (!stockDetailRows.length) {
+    $("stockDetailSummary").innerHTML = "";
+    $("stockSizeMatrix").innerHTML = "";
+    $("stockDetailRows").innerHTML = `<tr><td colspan="12">Bu urun kodu icin goz stogu bulunamadi.</td></tr>`;
+    return;
+  }
+  const first = stockDetailRows[0];
+  const total = stockDetailRows.reduce((sum, row) => sum + numeric(row.locationStock), 0);
+  const groups = stockMatrixGroups.map((group) => {
+    const sum = stockDetailRows.filter((row) => row.locationGroup === group).reduce((acc, row) => acc + numeric(row.locationStock), 0);
+    return [group, sum];
+  });
+  $("stockDetailTitle").textContent = `${productCode} / ${first.title || ""}`;
+  $("stockDetailSummary").innerHTML = [
+    ["Urun Kodu", productCode],
+    ["Marka", first.brand || ""],
+    ["Toplam Goz Stok", total],
+    ...groups
+  ].map(([label, value]) => `<div><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>`).join("");
+  renderStockSizeMatrix();
+  $("stockDetailRows").innerHTML = stockDetailRows.map((row) => {
+    const stock = numeric(row.locationStock);
+    const rowClass = stock <= 0 ? "out-stock" : stock <= 2 ? "low-stock" : "";
+    return `<tr class="${rowClass}">
+      <td><div class="table-thumb">${renderImage(row.image, row.productCode)}</div></td>
+      <td>${escapeHtml(row.locationGroup)}</td>
+      <td>${escapeHtml(row.shelfUnitCode)}</td>
+      <td>${escapeHtml(row.productCode)}</td>
+      <td>${escapeHtml(row.title)}</td>
+      <td>${escapeHtml(row.brand)}</td>
+      <td>${escapeHtml(row.color)}</td>
+      <td>${escapeHtml(row.size)}</td>
+      <td>${escapeHtml(row.barcode)}</td>
+      <td>${escapeHtml(row.stockCode)}</td>
+      <td>${escapeHtml(row.locationStock)}</td>
+      <td>${escapeHtml(row.variantStock)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function renderStockSizeMatrix() {
+  const sizes = unique(stockDetailRows.map((row) => row.size).filter(Boolean));
+  const colors = unique(stockDetailRows.map((row) => row.color).filter(Boolean));
+  const rows = [];
+  for (const color of colors.length ? colors : [""]) {
+    for (const group of stockMatrixGroups) {
+      const cells = sizes.map((size) => stockDetailRows
+        .filter((row) => row.locationGroup === group && String(row.color || "") === color && String(row.size || "") === size)
+        .reduce((sum, row) => sum + numeric(row.locationStock), 0));
+      const total = cells.reduce((sum, value) => sum + value, 0);
+      if (total > 0) rows.push({ color, group, cells, total });
+    }
+  }
+  const header = [`<th>Renk</th><th>Goz</th>`].concat(sizes.map((size) => `<th>${escapeHtml(size)}</th>`), [`<th>Toplam</th>`]).join("");
+  const body = rows.map((row) => `<tr>
+    <td>${escapeHtml(row.color)}</td>
+    <td>${escapeHtml(row.group)}</td>
+    ${row.cells.map((value) => `<td class="${value > 0 ? "matrix-hit" : ""}">${value || ""}</td>`).join("")}
+    <td><strong>${row.total}</strong></td>
+  </tr>`).join("");
+  $("stockSizeMatrix").innerHTML = `<thead><tr>${header}</tr></thead><tbody>${body || `<tr><td colspan="${sizes.length + 3}">Beden dagilimi bulunamadi.</td></tr>`}</tbody>`;
+}
+
+function exportStockLocationsCsv() {
+  if (!stockLocationRows.length) {
+    setNotice("Once Stok sayfasindan stok gozlerini getirmek gerekiyor.");
+    return;
+  }
+  const header = ["Resim", "GozGrubu", "GozAdi", "GozBarkod", "UrunKodu", "Aciklama", "Marka", "Renk", "Beden", "Barkod", "StokKodu", "GozStok", "ToplamStok"];
+  const csvRows = [header].concat(stockLocationRows.map((r) => [resolveImageUrl(r.image), r.locationGroup, r.shelfUnitCode, r.shelfUnitBarcode, r.productCode, r.title, r.brand, r.color, r.size, r.barcode, r.stockCode, r.locationStock, r.variantStock]));
+  const csv = csvRows.map((row) => row.map(csvCell).join(";")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "ecs-stok-gozleri.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 async function loadMissingAttributes() {
   $("missingAttrNotice").textContent = "Etiket/ozellik filtresi eksikleri yukleniyor...";
   $("missingAttrRows").innerHTML = `<tr><td colspan="11">Yukleniyor...</td></tr>`;
@@ -756,11 +917,17 @@ async function writeFeatureToNebim() {
 }
 
 function showPage(page) {
+  const products = page === "products";
+  const stock = page === "stock";
   const reports = page === "reports";
-  $("pageProducts").classList.toggle("active", !reports);
+  $("pageProducts").classList.toggle("active", products);
+  $("pageStock").classList.toggle("active", stock);
   $("pageReports").classList.toggle("active", reports);
-  $("productWorkspace").classList.toggle("hidden", reports);
+  $("productWorkspace").classList.toggle("hidden", !products);
   document.querySelectorAll(".tab-button").forEach((btn) => btn.classList.toggle("active", btn.dataset.page === page));
+  if (stock && !stockLocationRows.length) {
+    loadStockLocations();
+  }
   if (reports) {
     loadMissingAttributeGroups().catch((err) => $("missingAttrNotice").textContent = err.message);
     loadReportBrands().catch((err) => $("missingAttrNotice").textContent = err.message);
@@ -859,6 +1026,9 @@ $("clearFilters").addEventListener("click", clearFilters);
 $("exportCsv").addEventListener("click", exportCsv);
 $("loadMissingAttrs").addEventListener("click", loadMissingAttributes);
 $("exportMissingAttrs").addEventListener("click", exportMissingAttributesCsv);
+$("loadStockLocations").addEventListener("click", loadStockLocations);
+$("exportStockLocations").addEventListener("click", exportStockLocationsCsv);
+$("loadStockDetail").addEventListener("click", loadStockDetail);
 $("generateFeature").addEventListener("click", generateFeature);
 $("webSearchFeature").addEventListener("click", webSearchFeature);
 $("writeFeature").addEventListener("click", writeFeatureToNebim);
@@ -873,6 +1043,14 @@ $("sortBy").addEventListener("change", () => { renderModels(); renderDetail(); }
 $("missingAttrSearch").addEventListener("keydown", (event) => {
   if (event.key === "Enter") loadMissingAttributes();
 });
+$("stockLocationSearch").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") loadStockLocations();
+});
+$("stockDetailProductCode").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") loadStockDetail();
+});
+$("stockLocationGroup").addEventListener("change", loadStockLocations);
+$("stockLocationTake").addEventListener("change", loadStockLocations);
 $("missingAttrFeature").addEventListener("change", loadMissingAttributes);
 $("missingAttrBrandSearch").addEventListener("input", scheduleMissingAttributesLoad);
 $("missingAttrBrandSearch").addEventListener("keydown", (event) => {

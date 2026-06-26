@@ -1679,6 +1679,101 @@ tr.selected-row td {
   gap: 12px;
 }
 
+.stock-locations {
+  display: grid;
+  gap: 12px;
+}
+
+.stock-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px) minmax(110px, 140px) auto auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.stock-detail-search {
+  display: grid;
+  grid-template-columns: minmax(220px, 420px) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.stock-detail-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  background: #fbfcfe;
+}
+
+.stock-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.stock-detail-summary div {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #fff;
+}
+
+.stock-detail-summary strong {
+  display: block;
+  font-size: 17px;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.stock-detail-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stock-matrix-wrap table {
+  min-width: 760px;
+}
+
+.stock-matrix-wrap td,
+.stock-matrix-wrap th {
+  text-align: center;
+}
+
+.stock-matrix-wrap td:first-child,
+.stock-matrix-wrap td:nth-child(2),
+.stock-matrix-wrap th:first-child,
+.stock-matrix-wrap th:nth-child(2) {
+  text-align: left;
+}
+
+.matrix-hit {
+  background: #e7f6ed;
+  color: #0f6b3d;
+  font-weight: 700;
+}
+
+.link-button {
+  height: auto;
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 700;
+  text-align: left;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+  filter: none;
+}
+
+.stock-table table {
+  min-width: 1260px;
+}
+
 .missing-toolbar {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px) minmax(150px, 200px) minmax(110px, 140px) auto auto;
@@ -1733,6 +1828,9 @@ tr.below-cost td {
   }
 
   .analysis-controls,
+  .stock-toolbar,
+  .stock-detail-search,
+  .stock-detail-summary,
   .missing-toolbar,
   .metric-strip {
     grid-template-columns: 1fr;

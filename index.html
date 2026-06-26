@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ECS</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=20260626-stock-image-4">
 </head>
 <body>
   <header class="topbar">
@@ -23,6 +23,7 @@
   <main>
     <nav class="tabs">
       <button class="tab-button active" type="button" data-page="products">Urun Paneli</button>
+      <button class="tab-button" type="button" data-page="stock">Stok</button>
       <button class="tab-button" type="button" data-page="reports">Raporlar</button>
     </nav>
 
@@ -85,6 +86,103 @@
       <div><strong id="profitValue">0</strong><span>Tahmini Kar</span></div>
     </section>
 
+    </div>
+
+    <div id="pageStock" class="page">
+    <section class="band stock-locations">
+      <div class="subsection-head">
+        <h3>Stok Gozleri</h3>
+        <span id="stockLocationCount">0 kayit</span>
+      </div>
+      <div class="stock-toolbar">
+        <div class="field">
+          <label>Arama</label>
+          <input id="stockLocationSearch" placeholder="Urun kodu, aciklama, barkod, renk, beden">
+        </div>
+        <div class="field">
+          <label>Goz</label>
+          <select id="stockLocationGroup">
+            <option value="all">Tum gozler</option>
+            <option value="MULTIBRAND-001">MULTIBRAND-001</option>
+            <option value="LVT-TEKS-001">LVT-TEKS-001</option>
+            <option value="LVT-AYK-001">LVT-AYK-001</option>
+            <option value="LVT-ÇNT-001">LVT-ÇNT-001</option>
+            <option value="depo">Depo</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Limit</label>
+          <select id="stockLocationTake">
+            <option value="250">250</option>
+            <option value="500">500</option>
+            <option value="1000" selected>1000</option>
+            <option value="2000">2000</option>
+          </select>
+        </div>
+        <button id="loadStockLocations" type="button">Stoklari Getir</button>
+        <button id="exportStockLocations" type="button">CSV Al</button>
+      </div>
+      <div id="stockLocationNotice" class="inline-note"></div>
+      <div class="stock-detail-search">
+        <div class="field">
+          <label>Urun Kodu Detay</label>
+          <input id="stockDetailProductCode" placeholder="Orn: GUU.01">
+        </div>
+        <button id="loadStockDetail" type="button">Urun Goz Detayi</button>
+      </div>
+      <section id="stockDetailPanel" class="stock-detail-panel hidden">
+        <div class="subsection-head">
+          <h3 id="stockDetailTitle">Urun Goz Detayi</h3>
+          <span id="stockDetailCount">0 kayit</span>
+        </div>
+        <div id="stockDetailSummary" class="stock-detail-summary"></div>
+        <div class="table-wrap stock-matrix-wrap">
+          <table id="stockSizeMatrix"></table>
+        </div>
+        <div class="table-wrap stock-table stock-detail-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Resim</th>
+                <th>Goz Grubu</th>
+                <th>Goz Adi</th>
+                <th>Urun Kodu</th>
+                <th>Aciklama</th>
+                <th>Marka</th>
+                <th>Renk</th>
+                <th>Beden</th>
+                <th>Barkod</th>
+                <th>Stok Kodu</th>
+                <th>Goz Stok</th>
+                <th>Toplam Stok</th>
+              </tr>
+            </thead>
+            <tbody id="stockDetailRows"></tbody>
+          </table>
+        </div>
+      </section>
+      <div class="table-wrap stock-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Resim</th>
+              <th>Goz Grubu</th>
+              <th>Goz Adi</th>
+              <th>Urun Kodu</th>
+              <th>Aciklama</th>
+              <th>Marka</th>
+              <th>Renk</th>
+              <th>Beden</th>
+              <th>Barkod</th>
+              <th>Stok Kodu</th>
+              <th>Goz Stok</th>
+              <th>Toplam Stok</th>
+            </tr>
+          </thead>
+          <tbody id="stockLocationRows"></tbody>
+        </table>
+      </div>
+    </section>
     </div>
 
     <div id="pageReports" class="page">
@@ -276,6 +374,6 @@
     </section>
   </main>
 
-  <script src="/app.js"></script>
+  <script src="/app.js?v=20260626-stock-image-4"></script>
 </body>
 </html>

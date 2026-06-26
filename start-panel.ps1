@@ -315,6 +315,9 @@ function Send-Text($Response, [int]$Status, [string]$ContentType, [string]$Text)
     $bytes = [Text.Encoding]::UTF8.GetBytes($Text)
     $Response.StatusCode = $Status
     $Response.ContentType = "$ContentType; charset=utf-8"
+    $Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    $Response.Headers["Pragma"] = "no-cache"
+    $Response.Headers["Expires"] = "0"
     $Response.ContentLength64 = $bytes.Length
     $Response.OutputStream.Write($bytes, 0, $bytes.Length)
     $Response.OutputStream.Close()
@@ -905,6 +908,186 @@ ORDER BY Brand
     return [pscustomobject]@{ brands = @($rows) }
 }
 
+function Get-StockLocations([string]$Search, [string]$LocationGroup = "all", [int]$Take = 1000) {
+    if ($Take -lt 1 -or $Take -gt 5000) { $Take = 1000 }
+    $params = @{}
+    $focusLocations = "N'MULTIBRAND-001', N'LVT-TEKS-001', N'LVT-AYK-001', N'LVT-ÇNT-001'"
+    $filters = @("ISNULL(l.StockQuantity, 0) > 0")
+
+    if ($LocationGroup -eq "depo") {
+        $filters += "(sb.ShelfUnitCode IS NULL OR sb.ShelfUnitCode NOT IN ($focusLocations))"
+    } elseif (-not [string]::IsNullOrWhiteSpace($LocationGroup) -and $LocationGroup -ne "all") {
+        $filters += "sb.ShelfUnitCode = @locationGroup"
+        $params["@locationGroup"] = $LocationGroup
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Search)) {
+        $filters += @"
+(
+    p.ProductCode LIKE @searchPrefix OR
+    p.ProductTitle LIKE @search OR
+    p.Brand LIKE @search OR
+    COALESCE(NULLIF(s.NebimColor, ''), v.ColorCode) LIKE @search OR
+    v.SizeCode LIKE @search OR
+    v.StockCode LIKE @searchPrefix OR
+    v.Barcode LIKE @searchPrefix OR
+    sb.ShelfUnitCode LIKE @search OR
+    l.ShelfUnitBarcode LIKE @searchPrefix
+)
+"@
+        $params["@search"] = "%$Search%"
+        $params["@searchPrefix"] = "$Search%"
+    }
+
+    $where = "WHERE " + ($filters -join " AND ")
+    $sql = @"
+SELECT TOP ($Take)
+    CASE
+        WHEN q.shelfUnitCode IN ($focusLocations) THEN q.shelfUnitCode
+        ELSE 'Depo'
+    END AS locationGroup,
+    q.shelfUnitCode,
+    q.shelfUnitBarcode,
+    q.productCode,
+    q.title,
+    q.brand,
+    q.description,
+    q.color,
+    q.size,
+    q.barcode,
+    q.stockCode,
+    q.locationStock,
+    q.variantStock,
+    q.image
+FROM (
+    SELECT
+        ISNULL(sb.ShelfUnitCode, 'Goz Kodu Yok') AS shelfUnitCode,
+        l.ShelfUnitBarcode AS shelfUnitBarcode,
+        p.ProductCode AS productCode,
+        p.ProductTitle AS title,
+        p.Brand AS brand,
+        MAX(CONVERT(varchar(max), p.Description)) AS description,
+        COALESCE(NULLIF(s.NebimColor, ''), v.ColorCode) AS color,
+        v.SizeCode AS size,
+        v.Barcode AS barcode,
+        v.StockCode AS stockCode,
+        SUM(ISNULL(l.StockQuantity, 0)) AS locationStock,
+        MAX(ISNULL(v.StockAmount, 0)) AS variantStock,
+        MIN(COALESCE(NULLIF(v.ImageUrl, ''), img.ImagePath)) AS image
+    FROM dbo.AP_06ProductLocations l
+    LEFT JOIN dbo.AP_04ProductVariants v ON v.Id = l.ProductVariantId
+    LEFT JOIN dbo.AP_02ProductSubs s ON s.Id = v.ProductSubId
+    LEFT JOIN dbo.AP_01Products p ON p.Id = s.ProductId
+    LEFT JOIN dbo.DF_StorageBarcodes sb ON sb.ShelfUnitBarcode = l.ShelfUnitBarcode
+    OUTER APPLY (
+        SELECT TOP 1 ImagePath
+        FROM dbo.AP_03ProductImageFiles i
+        WHERE i.ProductSubId = s.Id AND ISNULL(i.IsActive, 1) = 1
+        ORDER BY ISNULL(i.DisplayOrder, 9999), i.Id
+    ) img
+    $where
+    GROUP BY
+        ISNULL(sb.ShelfUnitCode, 'Goz Kodu Yok'),
+        l.ShelfUnitBarcode,
+        p.ProductCode,
+        p.ProductTitle,
+        p.Brand,
+        COALESCE(NULLIF(s.NebimColor, ''), v.ColorCode),
+        v.SizeCode,
+        v.Barcode,
+        v.StockCode
+) q
+ORDER BY
+    CASE WHEN q.shelfUnitCode IN ($focusLocations) THEN 0 ELSE 1 END,
+    q.shelfUnitCode,
+    q.productCode,
+    q.color,
+    q.size
+"@
+
+    $rows = Invoke-Query "avrupayakasi" $sql $params
+    return [pscustomobject]@{ rows = @($rows) }
+}
+
+function Get-StockLocationDetail([string]$ProductCode) {
+    if ([string]::IsNullOrWhiteSpace($ProductCode)) { throw "Urun kodu bos olamaz." }
+    $cleanCode = $ProductCode.Trim()
+    $focusLocations = "N'MULTIBRAND-001', N'LVT-TEKS-001', N'LVT-AYK-001', N'LVT-ÇNT-001'"
+    $sql = @"
+SELECT
+    CASE
+        WHEN q.shelfUnitCode IN ($focusLocations) THEN q.shelfUnitCode
+        ELSE 'Depo'
+    END AS locationGroup,
+    q.shelfUnitCode,
+    q.shelfUnitBarcode,
+    q.productCode,
+    q.title,
+    q.brand,
+    q.description,
+    q.color,
+    q.size,
+    q.barcode,
+    q.stockCode,
+    q.locationStock,
+    q.variantStock,
+    q.image
+FROM (
+    SELECT
+        ISNULL(sb.ShelfUnitCode, 'Goz Kodu Yok') AS shelfUnitCode,
+        l.ShelfUnitBarcode AS shelfUnitBarcode,
+        p.ProductCode AS productCode,
+        p.ProductTitle AS title,
+        p.Brand AS brand,
+        MAX(CONVERT(varchar(max), p.Description)) AS description,
+        COALESCE(NULLIF(s.NebimColor, ''), v.ColorCode) AS color,
+        v.SizeCode AS size,
+        v.Barcode AS barcode,
+        v.StockCode AS stockCode,
+        SUM(ISNULL(l.StockQuantity, 0)) AS locationStock,
+        MAX(ISNULL(v.StockAmount, 0)) AS variantStock,
+        MIN(COALESCE(NULLIF(v.ImageUrl, ''), img.ImagePath)) AS image
+    FROM dbo.AP_06ProductLocations l
+    LEFT JOIN dbo.AP_04ProductVariants v ON v.Id = l.ProductVariantId
+    LEFT JOIN dbo.AP_02ProductSubs s ON s.Id = v.ProductSubId
+    LEFT JOIN dbo.AP_01Products p ON p.Id = s.ProductId
+    LEFT JOIN dbo.DF_StorageBarcodes sb ON sb.ShelfUnitBarcode = l.ShelfUnitBarcode
+    OUTER APPLY (
+        SELECT TOP 1 ImagePath
+        FROM dbo.AP_03ProductImageFiles i
+        WHERE i.ProductSubId = s.Id AND ISNULL(i.IsActive, 1) = 1
+        ORDER BY ISNULL(i.DisplayOrder, 9999), i.Id
+    ) img
+    WHERE ISNULL(l.StockQuantity, 0) > 0
+      AND p.ProductCode = @productCode
+    GROUP BY
+        ISNULL(sb.ShelfUnitCode, 'Goz Kodu Yok'),
+        l.ShelfUnitBarcode,
+        p.ProductCode,
+        p.ProductTitle,
+        p.Brand,
+        COALESCE(NULLIF(s.NebimColor, ''), v.ColorCode),
+        v.SizeCode,
+        v.Barcode,
+        v.StockCode
+) q
+ORDER BY
+    CASE
+        WHEN q.shelfUnitCode = N'LVT-TEKS-001' THEN 1
+        WHEN q.shelfUnitCode = N'LVT-AYK-001' THEN 2
+        WHEN q.shelfUnitCode = N'LVT-ÇNT-001' THEN 3
+        WHEN q.shelfUnitCode = N'MULTIBRAND-001' THEN 4
+        ELSE 5
+    END,
+    q.shelfUnitCode,
+    q.color,
+    q.size
+"@
+
+    $rows = Invoke-Query "avrupayakasi" $sql @{ "@productCode" = $cleanCode }
+    return [pscustomobject]@{ productCode = $cleanCode; rows = @($rows) }
+}
+
 function Save-ProductAttribute($Payload) {
     $productId = [int]$Payload.productId
     $productCode = [string]$Payload.productCode
@@ -998,6 +1181,14 @@ try {
                 Send-Json $ctx.Response (Get-MissingAttributeGroups)
             } elseif ($path -eq "/api/report-brands") {
                 Send-Json $ctx.Response (Get-ReportBrands)
+            } elseif ($path -eq "/api/stock-locations") {
+                $take = 1000
+                if ($ctx.Request.QueryString["take"]) { $take = [int]$ctx.Request.QueryString["take"] }
+                $group = $ctx.Request.QueryString["group"]
+                if ([string]::IsNullOrWhiteSpace($group)) { $group = "all" }
+                Send-Json $ctx.Response (Get-StockLocations $ctx.Request.QueryString["search"] $group $take)
+            } elseif ($path -eq "/api/stock-location-detail") {
+                Send-Json $ctx.Response (Get-StockLocationDetail $ctx.Request.QueryString["productCode"])
             } elseif ($path -eq "/api/product-description" -and $ctx.Request.HttpMethod -eq "POST") {
                 Send-Json $ctx.Response (Save-ProductDescription (Read-BodyJson $ctx.Request))
             } elseif ($path -eq "/api/product-attribute" -and $ctx.Request.HttpMethod -eq "POST") {
