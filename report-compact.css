@@ -87,3 +87,46 @@
     right: 0;
   }
 }
+
+.feature-note-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: start center;
+  padding: 24px;
+  overflow: auto;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.feature-note-panel.hidden {
+  display: none;
+}
+
+.feature-note-dialog {
+  width: min(1320px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.34);
+}
+
+.feature-note-dialog .band {
+  border: 0;
+  border-radius: 8px;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+@media (max-width: 700px) {
+  .feature-note-panel {
+    padding: 8px;
+  }
+
+  .feature-note-dialog {
+    max-height: calc(100vh - 16px);
+  }
+}

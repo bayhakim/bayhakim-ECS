@@ -760,11 +760,12 @@ function renderFeatureNote(options = {}) {
 
 function openFeatureNote() {
   $("featureNotePanel").classList.remove("hidden");
-  $("featureNotePanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  document.body.classList.add("modal-open");
 }
 
 function closeFeatureNote() {
   $("featureNotePanel").classList.add("hidden");
+  document.body.classList.remove("modal-open");
 }
 
 function selectedFeatureProductCode() {
@@ -1082,4 +1083,7 @@ $("missingAttrRows").addEventListener("click", (event) => {
   }
 });
 $("closeFeatureNote").addEventListener("click", closeFeatureNote);
+$("featureNotePanel").addEventListener("click", (event) => {
+  if (event.target === $("featureNotePanel")) closeFeatureNote();
+});
 refreshStatus().then(loadSchema).catch((err) => setNotice(err.message));
