@@ -615,7 +615,7 @@ function exportStockLocationsCsv() {
 
 async function loadMissingAttributes() {
   $("missingAttrNotice").textContent = "Etiket/ozellik filtresi eksikleri yukleniyor...";
-  $("missingAttrRows").innerHTML = `<tr><td colspan="11">Yukleniyor...</td></tr>`;
+  $("missingAttrRows").innerHTML = `<tr><td colspan="12">Yukleniyor...</td></tr>`;
   const keepSelectedCode = selectedFeatureProductCode();
   const search = $("missingAttrSearch").value.trim();
   const stock = $("missingAttrStock").value;
@@ -644,7 +644,7 @@ async function loadMissingAttributes() {
   } catch (err) {
     $("missingAttrCount").textContent = "Hata";
     $("missingAttrNotice").textContent = err.message;
-    $("missingAttrRows").innerHTML = `<tr><td colspan="11">${escapeHtml(err.message)}</td></tr>`;
+    $("missingAttrRows").innerHTML = `<tr><td colspan="12">${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -704,7 +704,7 @@ function scheduleMissingAttributesLoad() {
 function renderMissingAttributes() {
   $("missingAttrCount").textContent = `${missingAttributeRows.length} kayit`;
   if (!missingAttributeRows.length) {
-    $("missingAttrRows").innerHTML = `<tr><td colspan="11">Kayit yok.</td></tr>`;
+    $("missingAttrRows").innerHTML = `<tr><td colspan="12">Kayit yok.</td></tr>`;
     return;
   }
   $("missingAttrRows").innerHTML = missingAttributeRows.map((row, index) => {

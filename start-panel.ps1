@@ -1143,6 +1143,8 @@ try {
                 Send-Text $ctx.Response 200 "text/html" (Get-Content (Join-Path $script:Root "index.html") -Raw)
             } elseif ($path -eq "/styles.css") {
                 Send-Text $ctx.Response 200 "text/css" (Get-Content (Join-Path $script:Root "styles.css") -Raw)
+            } elseif ($path -eq "/report-compact.css") {
+                Send-Text $ctx.Response 200 "text/css" (Get-Content (Join-Path $script:Root "report-compact.css") -Raw)
             } elseif ($path -eq "/app.js") {
                 Send-Text $ctx.Response 200 "application/javascript" (Get-Content (Join-Path $script:Root "app.js") -Raw)
             } elseif ($path -eq "/api/status") {
