@@ -711,8 +711,9 @@ function renderMissingAttributes() {
     const stock = numeric(row.stock);
     const rowClass = stock <= 0 ? "out-stock" : stock <= 2 ? "low-stock" : "";
     const detailMode = $("missingAttrMode").value === "detail";
+    const imageUrl = resolveImageUrl(row.image);
     return `<tr class="${rowClass}">
-      <td><div class="table-thumb">${renderImage(row.image, row.productCode)}</div></td>
+      <td>${imageUrl ? `<button class="image-action" type="button" data-image-url="${escapeAttr(imageUrl)}">Resim Bak</button>` : `<span class="muted-cell">Yok</span>`}</td>
       <td>${escapeHtml(row.missingFeature)}</td>
       <td>${escapeHtml(row.productCode)}</td>
       <td>${escapeHtml(row.brand)}</td>
@@ -731,6 +732,10 @@ function renderMissingAttributes() {
     selectedMissingAttribute = missingAttributeRows[Number(button.dataset.missingIndex)];
     renderFeatureNote();
     openFeatureNote();
+  }));
+  document.querySelectorAll(".image-action[data-image-url]").forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    window.open(button.dataset.imageUrl, "_blank", "noopener,noreferrer");
   }));
 }
 
