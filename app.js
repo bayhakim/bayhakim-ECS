@@ -727,16 +727,6 @@ function renderMissingAttributes() {
       <td><button class="row-action" type="button" data-missing-index="${index}">Ozellik Notu Olustur</button></td>
     </tr>`;
   }).join("");
-  document.querySelectorAll(".row-action[data-missing-index]").forEach((button) => button.addEventListener("click", (event) => {
-    event.stopPropagation();
-    selectedMissingAttribute = missingAttributeRows[Number(button.dataset.missingIndex)];
-    renderFeatureNote();
-    openFeatureNote();
-  }));
-  document.querySelectorAll(".image-action[data-image-url]").forEach((button) => button.addEventListener("click", (event) => {
-    event.stopPropagation();
-    window.open(button.dataset.imageUrl, "_blank", "noopener,noreferrer");
-  }));
 }
 
 function renderFeatureNote(options = {}) {
@@ -770,6 +760,7 @@ function renderFeatureNote(options = {}) {
 
 function openFeatureNote() {
   $("featureNotePanel").classList.remove("hidden");
+  $("featureNotePanel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function closeFeatureNote() {
@@ -1069,5 +1060,26 @@ $("missingAttrStatus").addEventListener("change", loadMissingAttributes);
 $("missingAttrMode").addEventListener("change", loadMissingAttributes);
 $("missingAttrStock").addEventListener("change", loadMissingAttributes);
 $("missingAttrTake").addEventListener("change", loadMissingAttributes);
+$("missingAttrRows").addEventListener("click", (event) => {
+  const imageButton = event.target.closest(".image-action[data-image-url]");
+  if (imageButton) {
+    event.stopPropagation();
+    window.open(imageButton.dataset.imageUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  const featureButton = event.target.closest(".row-action[data-missing-index]");
+  if (featureButton) {
+    event.stopPropagation();
+    const index = Number(featureButton.dataset.missingIndex);
+    selectedMissingAttribute = missingAttributeRows[index];
+    if (!selectedMissingAttribute) {
+      $("missingAttrNotice").textContent = "Urun secilemedi. Listeyi yenileyip tekrar deneyin.";
+      return;
+    }
+    renderFeatureNote();
+    openFeatureNote();
+  }
+});
 $("closeFeatureNote").addEventListener("click", closeFeatureNote);
 refreshStatus().then(loadSchema).catch((err) => setNotice(err.message));
