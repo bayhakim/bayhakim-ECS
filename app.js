@@ -39,10 +39,49 @@ let reportBrands = [];
 let brandSearchTimer = null;
 let stockLocationRows = [];
 let stockDetailRows = [];
+const resolvedMissingStorageKey = "ecsResolvedMissingCodes";
 const stockMatrixGroups = ["LVT-TEKS-001", "LVT-AYK-001", "LVT-ÇNT-001", "MULTIBRAND-001", "Depo"];
 
 const $ = (id) => document.getElementById(id);
 const normalize = (text) => (text || "").toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+function loadResolvedMissingKeys() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(resolvedMissingStorageKey) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+let resolvedMissingKeys = loadResolvedMissingKeys();
+
+function saveResolvedMissingKeys() {
+  try {
+    localStorage.setItem(resolvedMissingStorageKey, JSON.stringify(Array.from(resolvedMissingKeys)));
+  } catch {
+    // Local storage can be blocked; the current list still updates.
+  }
+}
+
+function rowProductCode(row) {
+  return (row?.productCode || row?.missingModel || "").toString().trim();
+}
+
+function resolvedMissingKey(check, productCode) {
+  return `${check || "description"}:${normalize(productCode)}`;
+}
+
+function markResolvedMissingCode(productCode, check) {
+  const code = (productCode || "").toString().trim();
+  if (!code) return;
+  resolvedMissingKeys.add(resolvedMissingKey(check, code));
+  saveResolvedMissingKeys();
+}
+
+function filterLocallyResolvedMissingRows(rows, check, status) {
+  if (status !== "missing") return rows;
+  return rows.filter((row) => !resolvedMissingKeys.has(resolvedMissingKey(check, rowProductCode(row))));
+}
 
 async function api(path, options) {
   const url = path.includes("?") ? `${path}&_=${Date.now()}` : `${path}?_=${Date.now()}`;
@@ -628,13 +667,13 @@ async function loadMissingAttributes() {
   $("missingAttrBrand").value = brand;
   try {
     const data = await api(`/api/missing-attributes?take=${encodeURIComponent(take)}&stock=${encodeURIComponent(stock)}&feature=${encodeURIComponent(feature)}&mode=${encodeURIComponent(mode)}&status=${encodeURIComponent(status)}&check=${encodeURIComponent(check)}&brand=${encodeURIComponent(brand)}&search=${encodeURIComponent(search)}`);
-    missingAttributeRows = data.rows || [];
+    missingAttributeRows = filterLocallyResolvedMissingRows(data.rows || [], check, status);
     renderMissingAttributes();
     $("missingAttrNotice").textContent = missingAttributeRows.length
       ? missingAttributeNoticeText(status, check)
       : emptyMissingAttributeNotice(status, stock, mode, check);
     if (keepSelectedCode) {
-      const refreshed = missingAttributeRows.find((row) => (row.productCode || row.missingModel || "") === keepSelectedCode);
+      const refreshed = missingAttributeRows.find((row) => rowProductCode(row) === keepSelectedCode);
       selectedMissingAttribute = refreshed || selectedMissingAttribute;
       renderFeatureNote({ keepText: true });
     } else {
@@ -775,9 +814,11 @@ function selectedFeatureProductCode() {
 
 function removeMissingCodeFromVisibleList(productCode) {
   const code = (productCode || "").toString();
-  if (!code || $("missingAttrStatus").value !== "missing") return;
+  if (!code) return;
+  markResolvedMissingCode(code, $("missingAttrCheck").value);
+  if ($("missingAttrStatus").value !== "missing") return;
   const before = missingAttributeRows.length;
-  missingAttributeRows = missingAttributeRows.filter((row) => (row.productCode || row.missingModel || "") !== code);
+  missingAttributeRows = missingAttributeRows.filter((row) => resolvedMissingKey($("missingAttrCheck").value, rowProductCode(row)) !== resolvedMissingKey($("missingAttrCheck").value, code));
   if (missingAttributeRows.length !== before) {
     renderMissingAttributes();
     $("missingAttrNotice").textContent = `${code} guncellendi ve eksikler listesinden cikarildi.`;
@@ -811,6 +852,7 @@ async function updateEcsFromNebim(reloadAfter = true) {
 }
 
 async function askEcsUpdateAfterNebim(successMessage) {
+  const code = selectedFeatureProductCode();
   $("featureWriteResult").textContent = successMessage;
   const shouldUpdate = window.confirm("Nebim'e yazildi. Simdi Nebimden ECS guncelleme yapilsin mi?");
   let updated = false;
@@ -819,7 +861,7 @@ async function askEcsUpdateAfterNebim(successMessage) {
   }
   await loadMissingAttributes();
   if (updated) {
-    removeMissingCodeFromVisibleList(selectedFeatureProductCode());
+    removeMissingCodeFromVisibleList(code);
     closeFeatureNote();
   }
 }
