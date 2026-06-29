@@ -292,10 +292,55 @@ function Invoke-EcsProductUpdateService([string]$ProductCode) {
     }
 }
 
+function Get-EcsProductDescriptionState([string]$ProductCode) {
+    if ([string]::IsNullOrWhiteSpace($ProductCode)) { throw "Urun kodu bos olamaz." }
+    $rows = @(Invoke-Query "avrupayakasi" @"
+SELECT TOP 1
+    ProductCode,
+    LEN(CONVERT(varchar(max), ISNULL(Description, ''))) AS DescriptionLength,
+    LEFT(CONVERT(varchar(max), ISNULL(Description, '')), 250) AS DescriptionStart
+FROM dbo.AP_01Products WITH (NOLOCK)
+WHERE ProductCode = @productCode
+"@ @{ "@productCode" = $ProductCode.Trim() })
+
+    if ($rows.Count -lt 1) {
+        return [pscustomobject]@{
+            productCode = $ProductCode.Trim()
+            exists = $false
+            descriptionLength = 0
+            descriptionStart = ""
+        }
+    }
+
+    return [pscustomobject]@{
+        productCode = [string]$rows[0].ProductCode
+        exists = $true
+        descriptionLength = [int]$rows[0].DescriptionLength
+        descriptionStart = [string]$rows[0].DescriptionStart
+    }
+}
+
 function Update-EcsProductFromNebim($Payload) {
     $productCode = [string]$Payload.productCode
+    $check = [string]$Payload.check
     if ([string]::IsNullOrWhiteSpace($productCode)) { throw "Urun kodu bos olamaz." }
-    return Invoke-EcsProductUpdateService $productCode
+    $service = Invoke-EcsProductUpdateService $productCode
+
+    if ([string]::IsNullOrWhiteSpace($check) -or $check -eq "description") {
+        $descriptionState = Get-EcsProductDescriptionState $productCode
+        if (-not $descriptionState.exists) {
+            throw "ECS servis OK dondu fakat urun ECS AP_01Products tablosunda bulunamadi: $productCode"
+        }
+        if ($descriptionState.descriptionLength -le 0) {
+            $nebimData = $null
+            try { $nebimData = Get-NebimProductUpdateData $productCode } catch { }
+            $nebimDescLen = if ($nebimData -and $nebimData.description) { $nebimData.description.Length } else { 0 }
+            throw "ECS servis OK dondu fakat AP_01Products.Description hala bos. Nebim notu/okunan aciklama uzunlugu: $nebimDescLen. ylc_GetProductInfoByItemCode notlar alanini ECS'ye tasimiyor olabilir."
+        }
+        $service | Add-Member -NotePropertyName ecsDescription -NotePropertyValue $descriptionState -Force
+    }
+
+    return $service
 }
 
 function Test-Database([string]$Database) {

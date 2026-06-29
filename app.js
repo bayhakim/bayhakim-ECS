@@ -885,7 +885,7 @@ async function updateEcsFromNebim(reloadAfter = true, productCode = "") {
     const result = await api("/api/ecs-update-from-nebim", {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify({ productCode: code })
+      body: JSON.stringify({ productCode: code, check: $("missingAttrCheck").value })
     });
     $("featureWriteResult").textContent = result.message || "ECS Nebimden guncellendi.";
     if (reloadAfter) {
