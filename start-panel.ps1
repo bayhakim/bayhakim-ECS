@@ -173,6 +173,68 @@ END
     }
 }
 
+function Save-NebimItemDescriptions([string]$ItemCode, [string]$PlainText, [string]$UserName = "GY   YahyaA") {
+    if ([string]::IsNullOrWhiteSpace($ItemCode)) { throw "Nebim urun kodu bos olamaz." }
+    if ([string]::IsNullOrWhiteSpace($PlainText)) { throw "Nebim aciklama metni bos olamaz." }
+
+    $cleanItemCode = $ItemCode.Trim()
+    $cleanUserName = $UserName.Trim()
+    $description = $PlainText.Trim()
+    if ($description.Length -gt 200) { $description = $description.Substring(0, 200) }
+
+    $conn = New-Object System.Data.SqlClient.SqlConnection (New-NebimConnectionString)
+    try {
+        $conn.Open()
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandTimeout = 120
+        $cmd.CommandText = @"
+IF NOT EXISTS (SELECT 1 FROM dbo.cdItem WHERE ItemTypeCode = @ItemTypeCode AND ItemCode = @ItemCode AND IsBlocked = 0)
+BEGIN
+  RAISERROR('Urun Nebim cdItem tablosunda bulunamadi veya blokeli.', 16, 1);
+  RETURN;
+END
+
+MERGE dbo.cdItemDesc AS target
+USING (
+    SELECT @ItemTypeCode AS ItemTypeCode, @ItemCode AS ItemCode, LangCode
+    FROM (VALUES ('TR'), ('B2C')) v(LangCode)
+) AS source
+ON target.ItemTypeCode = source.ItemTypeCode
+   AND target.ItemCode = source.ItemCode
+   AND target.LangCode = source.LangCode
+WHEN MATCHED THEN
+  UPDATE SET
+    ItemDescription = @Description,
+    LastUpdatedUserName = @UserName,
+    LastUpdatedDate = GETDATE()
+WHEN NOT MATCHED THEN
+  INSERT (ItemTypeCode, ItemCode, LangCode, ItemDescription, CreatedUserName, CreatedDate, LastUpdatedUserName, LastUpdatedDate, RowGuid)
+  VALUES (source.ItemTypeCode, source.ItemCode, source.LangCode, @Description, @UserName, GETDATE(), @UserName, GETDATE(), NEWID());
+
+SELECT @@ROWCOUNT AS AffectedRows;
+"@
+        [void]$cmd.Parameters.Add("@ItemTypeCode", [System.Data.SqlDbType]::TinyInt)
+        $cmd.Parameters["@ItemTypeCode"].Value = 1
+        [void]$cmd.Parameters.Add("@ItemCode", [System.Data.SqlDbType]::NVarChar, 30)
+        $cmd.Parameters["@ItemCode"].Value = $cleanItemCode
+        [void]$cmd.Parameters.Add("@Description", [System.Data.SqlDbType]::NVarChar, 200)
+        $cmd.Parameters["@Description"].Value = $description
+        [void]$cmd.Parameters.Add("@UserName", [System.Data.SqlDbType]::NVarChar, 20)
+        $cmd.Parameters["@UserName"].Value = $cleanUserName
+
+        $affected = $cmd.ExecuteScalar()
+        return [pscustomobject]@{
+            ok = $true
+            itemCode = $cleanItemCode
+            affected = $affected
+            descriptionLength = $description.Length
+            message = "Nebim cdItemDesc TR/B2C aciklama guncellendi: $cleanItemCode"
+        }
+    } finally {
+        if ($conn.State -eq "Open") { $conn.Close() }
+    }
+}
+
 function Invoke-NebimDataSet([string]$Sql, [hashtable]$Params = @{}) {
     $conn = New-Object System.Data.SqlClient.SqlConnection (New-NebimConnectionString)
     try {
@@ -1147,10 +1209,12 @@ function Save-ProductAttribute($Payload) {
     }
 
     $nebim = Save-NebimItemNote $productCode $note
+    $nebimDescription = Save-NebimItemDescriptions $productCode $note
     return [pscustomobject]@{
         ok = $true
         action = "nebim-note-only"
         nebim = $nebim
+        nebimDescription = $nebimDescription
         message = "Nebim notlar alanina yazildi: $productCode"
     }
 }
@@ -1164,10 +1228,12 @@ function Save-ProductDescription($Payload) {
     if ([string]::IsNullOrWhiteSpace($description)) { throw "Yazilacak aciklama/not bos olamaz." }
 
     $nebim = Save-NebimItemNote $productCode $description
+    $nebimDescription = Save-NebimItemDescriptions $productCode $description
     return [pscustomobject]@{
         ok = $true
         affected = 0
         nebim = $nebim
+        nebimDescription = $nebimDescription
         message = "Nebim notlar alanina yazildi: $productCode"
     }
 }
