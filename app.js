@@ -773,11 +773,22 @@ function selectedFeatureProductCode() {
   return selectedMissingAttribute.productCode || selectedMissingAttribute.missingModel || "";
 }
 
+function removeMissingCodeFromVisibleList(productCode) {
+  const code = (productCode || "").toString();
+  if (!code || $("missingAttrStatus").value !== "missing") return;
+  const before = missingAttributeRows.length;
+  missingAttributeRows = missingAttributeRows.filter((row) => (row.productCode || row.missingModel || "") !== code);
+  if (missingAttributeRows.length !== before) {
+    renderMissingAttributes();
+    $("missingAttrNotice").textContent = `${code} guncellendi ve eksikler listesinden cikarildi.`;
+  }
+}
+
 async function updateEcsFromNebim(reloadAfter = true) {
   const code = selectedFeatureProductCode();
   if (!code) {
     $("featureWriteResult").textContent = "Once bir urun sec.";
-    return;
+    return false;
   }
   $("featureWriteResult").textContent = "Nebimden ECS guncelleme yapiliyor...";
   try {
@@ -787,19 +798,30 @@ async function updateEcsFromNebim(reloadAfter = true) {
       body: JSON.stringify({ productCode: code })
     });
     $("featureWriteResult").textContent = result.message || "ECS Nebimden guncellendi.";
-    if (reloadAfter) await loadMissingAttributes();
+    if (reloadAfter) {
+      await loadMissingAttributes();
+      removeMissingCodeFromVisibleList(code);
+      closeFeatureNote();
+    }
+    return true;
   } catch (err) {
     $("featureWriteResult").textContent = `ECS guncellenemedi: ${err.message}`;
+    return false;
   }
 }
 
 async function askEcsUpdateAfterNebim(successMessage) {
   $("featureWriteResult").textContent = successMessage;
   const shouldUpdate = window.confirm("Nebim'e yazildi. Simdi Nebimden ECS guncelleme yapilsin mi?");
+  let updated = false;
   if (shouldUpdate) {
-    await updateEcsFromNebim(false);
+    updated = await updateEcsFromNebim(false);
   }
   await loadMissingAttributes();
+  if (updated) {
+    removeMissingCodeFromVisibleList(selectedFeatureProductCode());
+    closeFeatureNote();
+  }
 }
 
 function summarizeCsvText(value) {
