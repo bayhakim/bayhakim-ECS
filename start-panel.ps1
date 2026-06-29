@@ -328,16 +328,15 @@ function Update-EcsProductFromNebim($Payload) {
 
     if ([string]::IsNullOrWhiteSpace($check) -or $check -eq "description") {
         $descriptionState = Get-EcsProductDescriptionState $productCode
+        $service | Add-Member -NotePropertyName ecsDescription -NotePropertyValue $descriptionState -Force
         if (-not $descriptionState.exists) {
-            throw "ECS servis OK dondu fakat urun ECS AP_01Products tablosunda bulunamadi: $productCode"
-        }
-        if ($descriptionState.descriptionLength -le 0) {
+            $service | Add-Member -NotePropertyName warning -NotePropertyValue "ECS servis OK dondu fakat urun ECS AP_01Products tablosunda bulunamadi: $productCode" -Force
+        } elseif ($descriptionState.descriptionLength -le 0) {
             $nebimData = $null
             try { $nebimData = Get-NebimProductUpdateData $productCode } catch { }
             $nebimDescLen = if ($nebimData -and $nebimData.description) { $nebimData.description.Length } else { 0 }
-            throw "ECS servis OK dondu fakat AP_01Products.Description hala bos. Nebim notu/okunan aciklama uzunlugu: $nebimDescLen. ylc_GetProductInfoByItemCode notlar alanini ECS'ye tasimiyor olabilir."
+            $service | Add-Member -NotePropertyName warning -NotePropertyValue "ECS servis OK dondu; AP_01Products.Description kontrol aninda hala bos gorunuyor. Nebim notu/okunan aciklama uzunlugu: $nebimDescLen." -Force
         }
-        $service | Add-Member -NotePropertyName ecsDescription -NotePropertyValue $descriptionState -Force
     }
 
     return $service

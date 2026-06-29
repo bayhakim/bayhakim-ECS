@@ -887,7 +887,9 @@ async function updateEcsFromNebim(reloadAfter = true, productCode = "") {
       headers: { "Content-Type": "application/json; charset=utf-8" },
       body: JSON.stringify({ productCode: code, check: $("missingAttrCheck").value })
     });
-    $("featureWriteResult").textContent = result.message || "ECS Nebimden guncellendi.";
+    $("featureWriteResult").textContent = result.warning
+      ? `${result.message || "ECS Nebimden guncellendi."} ${result.warning}`
+      : (result.message || "ECS Nebimden guncellendi.");
     if (reloadAfter) {
       await loadMissingAttributes();
       removeMissingCodeFromVisibleList(code);
