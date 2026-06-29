@@ -40,6 +40,7 @@ let brandSearchTimer = null;
 let stockLocationRows = [];
 let stockDetailRows = [];
 const resolvedMissingStorageKey = "ecsResolvedMissingCodes";
+const featureNoteDraftStorageKey = "ecsFeatureNoteDraft";
 const stockMatrixGroups = ["LVT-TEKS-001", "LVT-AYK-001", "LVT-ÇNT-001", "MULTIBRAND-001", "Depo"];
 
 const $ = (id) => document.getElementById(id);
@@ -81,6 +82,52 @@ function markResolvedMissingCode(productCode, check) {
 function filterLocallyResolvedMissingRows(rows, check, status) {
   if (status !== "missing") return rows;
   return rows.filter((row) => !resolvedMissingKeys.has(resolvedMissingKey(check, rowProductCode(row))));
+}
+
+function featureNoteDraftPayload() {
+  if (!selectedMissingAttribute) return null;
+  return {
+    row: selectedMissingAttribute,
+    check: $("missingAttrCheck")?.value || "description",
+    value: $("featureValue")?.value || "",
+    note: $("featureNote")?.value || "",
+    result: $("featureWriteResult")?.textContent || "",
+    open: !$("featureNotePanel")?.classList.contains("hidden")
+  };
+}
+
+function saveFeatureNoteDraft() {
+  const payload = featureNoteDraftPayload();
+  if (!payload) return;
+  try {
+    sessionStorage.setItem(featureNoteDraftStorageKey, JSON.stringify(payload));
+  } catch {
+    // The selected product is still kept in memory while the page stays open.
+  }
+}
+
+function clearFeatureNoteDraft() {
+  try {
+    sessionStorage.removeItem(featureNoteDraftStorageKey);
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+function restoreFeatureNoteDraft() {
+  try {
+    const payload = JSON.parse(sessionStorage.getItem(featureNoteDraftStorageKey) || "null");
+    if (!payload?.row) return;
+    selectedMissingAttribute = payload.row;
+    if ($("missingAttrCheck") && payload.check) $("missingAttrCheck").value = payload.check;
+    renderFeatureNote();
+    $("featureValue").value = payload.value || "";
+    $("featureNote").value = payload.note || "";
+    $("featureWriteResult").textContent = payload.result || "";
+    if (payload.open) openFeatureNote();
+  } catch {
+    clearFeatureNoteDraft();
+  }
 }
 
 async function api(path, options) {
@@ -800,11 +847,13 @@ function renderFeatureNote(options = {}) {
 function openFeatureNote() {
   $("featureNotePanel").classList.remove("hidden");
   document.body.classList.add("modal-open");
+  saveFeatureNoteDraft();
 }
 
 function closeFeatureNote() {
   $("featureNotePanel").classList.add("hidden");
   document.body.classList.remove("modal-open");
+  saveFeatureNoteDraft();
 }
 
 function selectedFeatureProductCode() {
@@ -825,8 +874,8 @@ function removeMissingCodeFromVisibleList(productCode) {
   }
 }
 
-async function updateEcsFromNebim(reloadAfter = true) {
-  const code = selectedFeatureProductCode();
+async function updateEcsFromNebim(reloadAfter = true, productCode = "") {
+  const code = productCode || selectedFeatureProductCode();
   if (!code) {
     $("featureWriteResult").textContent = "Once bir urun sec.";
     return false;
@@ -843,6 +892,7 @@ async function updateEcsFromNebim(reloadAfter = true) {
       await loadMissingAttributes();
       removeMissingCodeFromVisibleList(code);
       closeFeatureNote();
+      clearFeatureNoteDraft();
     }
     return true;
   } catch (err) {
@@ -857,12 +907,13 @@ async function askEcsUpdateAfterNebim(successMessage) {
   const shouldUpdate = window.confirm("Nebim'e yazildi. Simdi Nebimden ECS guncelleme yapilsin mi?");
   let updated = false;
   if (shouldUpdate) {
-    updated = await updateEcsFromNebim(false);
+    updated = await updateEcsFromNebim(false, code);
   }
   await loadMissingAttributes();
   if (updated) {
     removeMissingCodeFromVisibleList(code);
     closeFeatureNote();
+    clearFeatureNoteDraft();
   }
 }
 
@@ -914,7 +965,10 @@ function webSearchFeature() {
   const row = selectedMissingAttribute;
   const value = $("featureValue").value.trim() || suggestFeatureValue(row);
   $("featureValue").value = value;
-  $("featureNote").value = buildFeatureDraft(row, value);
+  if (!$("featureNote").value.trim()) {
+    $("featureNote").value = buildFeatureDraft(row, value);
+  }
+  saveFeatureNoteDraft();
   const query = [
     row.brand,
     row.title,
@@ -924,11 +978,16 @@ function webSearchFeature() {
     row.barcode,
     cleanDescription(row.description).slice(0, 120)
   ].filter(Boolean).join(" ");
-  window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, "_blank", "noreferrer");
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  const opened = window.open(searchUrl, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    $("featureWriteResult").textContent = "Web arama yeni sekmede acilamadi. Tarayici izinlerini kontrol et.";
+  }
 }
 
 async function writeFeatureToNebim() {
   if (!selectedMissingAttribute) return;
+  saveFeatureNoteDraft();
   const row = selectedMissingAttribute;
   if ($("missingAttrCheck").value === "description") {
     const description = $("featureNote").value.trim();
@@ -1094,6 +1153,10 @@ $("generateFeature").addEventListener("click", generateFeature);
 $("webSearchFeature").addEventListener("click", webSearchFeature);
 $("writeFeature").addEventListener("click", writeFeatureToNebim);
 $("updateEcsFromNebim").addEventListener("click", updateEcsFromNebim);
+$("featureValue").addEventListener("input", saveFeatureNoteDraft);
+$("featureNote").addEventListener("input", saveFeatureNoteDraft);
+window.addEventListener("pagehide", saveFeatureNoteDraft);
+window.addEventListener("pageshow", restoreFeatureNoteDraft);
 document.querySelectorAll(".tab-button").forEach((btn) => btn.addEventListener("click", () => showPage(btn.dataset.page)));
 $("search").addEventListener("input", renderModels);
 $("search").addEventListener("keydown", (event) => {
@@ -1150,4 +1213,5 @@ $("closeFeatureNote").addEventListener("click", closeFeatureNote);
 $("featureNotePanel").addEventListener("click", (event) => {
   if (event.target === $("featureNotePanel")) closeFeatureNote();
 });
+restoreFeatureNoteDraft();
 refreshStatus().then(loadSchema).catch((err) => setNotice(err.message));
