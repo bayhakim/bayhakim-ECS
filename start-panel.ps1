@@ -23,6 +23,7 @@ if ([string]::IsNullOrWhiteSpace($script:SqlPassword)) {
 $script:DefaultDbs = @("avrupayakasi", "avytempdata", "pazaryerleri")
 $script:Port = if ($env:KANKA_PANEL_PORT) { [int]$env:KANKA_PANEL_PORT } else { 8787 }
 $script:Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$script:LogPath = Join-Path $script:Root "panel-error.log"
 $script:NebimSqlServer = if ($env:NEBIM_SQL_SERVER) { $env:NEBIM_SQL_SERVER } else { "192.168.2.25" }
 $script:NebimSqlDatabase = if ($env:NEBIM_SQL_DATABASE) { $env:NEBIM_SQL_DATABASE } else { "Avrupa_yakasi_online_v3" }
 $script:NebimSqlUser = if ($env:NEBIM_SQL_USER) { $env:NEBIM_SQL_USER } else { "sa" }
@@ -322,23 +323,18 @@ WHERE ProductCode = @productCode
 
 function Update-EcsProductFromNebim($Payload) {
     $productCode = [string]$Payload.productCode
-    $check = [string]$Payload.check
     if ([string]::IsNullOrWhiteSpace($productCode)) { throw "Urun kodu bos olamaz." }
     $service = Invoke-EcsProductUpdateService $productCode
-
-    if ([string]::IsNullOrWhiteSpace($check) -or $check -eq "description") {
-        $descriptionState = Get-EcsProductDescriptionState $productCode
-        $service | Add-Member -NotePropertyName ecsDescription -NotePropertyValue $descriptionState -Force
-        if (-not $descriptionState.exists) {
-            $service | Add-Member -NotePropertyName warning -NotePropertyValue "ECS servis OK dondu fakat urun ECS AP_01Products tablosunda bulunamadi: $productCode" -Force
-        } elseif ($descriptionState.descriptionLength -le 0) {
-            $nebimData = $null
-            try { $nebimData = Get-NebimProductUpdateData $productCode } catch { }
-            $nebimDescLen = if ($nebimData -and $nebimData.description) { $nebimData.description.Length } else { 0 }
-            $service | Add-Member -NotePropertyName warning -NotePropertyValue "ECS servis OK dondu; AP_01Products.Description kontrol aninda hala bos gorunuyor. Nebim notu/okunan aciklama uzunlugu: $nebimDescLen." -Force
-        }
+    $descriptionState = Get-EcsProductDescriptionState $productCode
+    $service | Add-Member -NotePropertyName ecsDescription -NotePropertyValue $descriptionState -Force
+    if (-not $descriptionState.exists) {
+        $service | Add-Member -NotePropertyName warning -NotePropertyValue "ECS servis OK dondu fakat urun ECS AP_01Products tablosunda bulunamadi: $productCode" -Force
+    } elseif ($descriptionState.descriptionLength -le 0) {
+        $nebimData = $null
+        try { $nebimData = Get-NebimProductUpdateData $productCode } catch { }
+        $nebimDescLen = if ($nebimData -and $nebimData.description) { $nebimData.description.Length } else { 0 }
+        $service | Add-Member -NotePropertyName warning -NotePropertyValue "ECS servis OK dondu; AP_01Products.Description kontrol aninda hala bos gorunuyor. Nebim okunan aciklama uzunlugu: $nebimDescLen." -Force
     }
-
     return $service
 }
 
@@ -365,6 +361,13 @@ function Send-Text($Response, [int]$Status, [string]$ContentType, [string]$Text)
     $Response.ContentLength64 = $bytes.Length
     $Response.OutputStream.Write($bytes, 0, $bytes.Length)
     $Response.OutputStream.Close()
+}
+
+function Write-PanelLog([string]$Message) {
+    try {
+        Add-Content -LiteralPath $script:LogPath -Value ("{0} {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message) -Encoding UTF8
+    } catch {
+    }
 }
 
 function Send-Json($Response, [object]$Payload, [int]$Status = 200) {
@@ -1252,6 +1255,7 @@ try {
                 $message = "$message $($_.Exception.InnerException.Message)".Trim()
             }
             if ([string]::IsNullOrWhiteSpace($message)) { $message = ($_ | Out-String).Trim() }
+            Write-PanelLog ("REQUEST ERROR {0}: {1}" -f $ctx.Request.Url.AbsolutePath, ($_ | Out-String).Trim())
             Send-Json $ctx.Response ([pscustomobject]@{ error = $message }) 500
         }
     }

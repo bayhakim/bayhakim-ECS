@@ -885,18 +885,21 @@ async function updateEcsFromNebim(reloadAfter = true, productCode = "") {
     const result = await api("/api/ecs-update-from-nebim", {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify({ productCode: code, check: $("missingAttrCheck").value })
+      body: JSON.stringify({ productCode: code })
     });
     $("featureWriteResult").textContent = result.warning
       ? `${result.message || "ECS Nebimden guncellendi."} ${result.warning}`
       : (result.message || "ECS Nebimden guncellendi.");
+    const verified = !result.warning && (!result.ecsDescription || result.ecsDescription.descriptionLength > 0);
     if (reloadAfter) {
       await loadMissingAttributes();
-      removeMissingCodeFromVisibleList(code);
-      closeFeatureNote();
-      clearFeatureNoteDraft();
+      if (verified) {
+        removeMissingCodeFromVisibleList(code);
+        closeFeatureNote();
+        clearFeatureNoteDraft();
+      }
     }
-    return true;
+    return verified;
   } catch (err) {
     $("featureWriteResult").textContent = `ECS guncellenemedi: ${err.message}`;
     return false;
